@@ -19,9 +19,12 @@
 package ch.njol.skript.classes.data;
 
 import java.util.Calendar;
+import java.util.UUID;
 
+import ch.njol.skript.Skript;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.util.Vector;
 
@@ -37,6 +40,7 @@ import ch.njol.skript.util.Date;
 import ch.njol.util.Math2;
 import ch.njol.util.StringUtils;
 import ch.njol.util.coll.CollectionUtils;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * @author Peter Güttinger
@@ -456,6 +460,44 @@ public class DefaultFunctions {
 		}).description("Returns a RGB color from the given red, green and blue parameters.")
 			.examples("dye player's leggings rgb(120, 30, 45)")
 			.since("2.5");
+
+		boolean HAS_PAPER_CACHE_METHOD = Skript.methodExists(OfflinePlayer.class, "getOfflinePlayerIfCached", String.class);
+
+		Functions.registerFunction(new SimpleJavaFunction<OfflinePlayer>("player", new Parameter[] {
+			new Parameter<>("player", DefaultClasses.STRING, true, null)
+		}, DefaultClasses.OFFLINE_PLAYER, true) {
+
+			@Nullable
+			@Override
+			public OfflinePlayer[] executeSimple(Object[][] params) {
+				String player = (String) params[0][0];
+				OfflinePlayer offlinePlayer = null;
+
+				if (player.matches("(?i)[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"))
+					offlinePlayer = Bukkit.getOfflinePlayer(UUID.fromString(player));
+				else if (!player.matches("[a-zA-Z0-9_]+") || player.length() > 16)
+					return null;
+				else {
+					// Paper method to not check Mojang API if player is cached, will return null if player is not cached
+					if (HAS_PAPER_CACHE_METHOD) {
+						offlinePlayer = Bukkit.getOfflinePlayerIfCached(player);
+					}
+					// Only use Bukkit method (check Mojang API) if Paper method is not present or player is not cached
+					if (offlinePlayer == null)
+						offlinePlayer = Bukkit.getOfflinePlayer(player);
+				}
+
+				if (offlinePlayer.isOnline()) {
+					return CollectionUtils.array(offlinePlayer.getPlayer());
+				} else {
+					return CollectionUtils.array(offlinePlayer);
+				}
+			}
+		}).description("Returns a player/offline player from the given name or uuid.")
+			.examples("set {_p} to player(\"Notch\")",
+				"send \"hello\" to player(\"Bob\")",
+				"ban player(\"some-player-uuid\")")
+			.since("INSERT VERSION");
 	}
 	
 }
